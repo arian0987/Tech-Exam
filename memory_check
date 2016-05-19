@@ -1,0 +1,64 @@
+#!/bin/bash
+#This script is saved inside my '/home/ubuntu/Documents' folder.
+#Need to create directory 'memory_check_logs' in the same directory
+#Im running this script using 'bash memory_check'
+#ssmtp must be configured to use mail '/etc/ssmtp/ssmtp.conf
+
+#function to print the required parameters
+usage() 
+{
+	echo "Usage: $0 [-c Critical Threshold<int>\"Note: c>w\"] [-w Warning Threshold<int>] [-e Email<string>]"; 
+	exit 1;
+}
+
+#while loop to store values of each arguments in their respected variables
+while getopts ":c:w:e:" o;
+do
+	case "${o}" in
+		c)
+			c=${OPTARG}
+			;;
+		w)
+			w=${OPTARG}
+			;;
+		e)
+			e=${OPTARG}
+			;;
+	esac
+done
+
+#if no options supplied, incomplete arguments and 
+#if warning threshold is greater than or equal to critical threshold
+if [ -z "${c}" ] || [ -z "${w}" ] || [ -z "${e}" ] || ((${c} <= ${w})); then
+	usage
+fi
+
+now=`date +%Y%m%d`" "`date +%H`":"`date +%M`
+#echo $now
+
+#get used memory
+USED_MEMORY=$( free | grep Mem: | awk '{ print $3 }' )
+#echo $USED_MEMORY
+
+if (($USED_MEMORY >= ${c})); then
+	echo "used memory is greater than or equal to critical threshold"
+	filename="$now memory_check_log.txt"
+	subject="$now memory check - critical"
+
+	#get top 10 processes and write them in 'memory_check__logs/(filename).txt' directory
+	ps axo %mem,pid,euser,cmd | sort -nnr | head -n 10 >> memory_check_logs/"$filename"
+
+	#send the viewable content of the file to the email
+	cat memory_check_logs/"$filename" | mail -s "$subject" "${e}"
+
+	#to send the file on email uncomment the line below
+	#echo "View the file." | mail -s "$subject" -A memory_check_logs/"$filename" "${e}"
+	exit 2;
+elif (($USED_MEMORY >= ${w} && $USED_MEMORY < ${c})); then
+	echo "used memory is greater than or equal to warning threshold but less than the critical threshold"
+	exit 1;
+else
+	echo "used memory is less than the warning threshold"
+	exit 0;
+fi
+
